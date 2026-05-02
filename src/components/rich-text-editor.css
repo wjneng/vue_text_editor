@@ -1,0 +1,512 @@
+.rv-editor {
+  --rv-editor-accent: #245a48;
+  --rv-editor-text: #1e2923;
+  --rv-editor-muted: #68746d;
+  --rv-editor-border: #d2dccf;
+  --rv-editor-panel-border: #d7ded5;
+  --rv-editor-toolbar-bg: #f8faf6;
+  --rv-editor-soft-bg: #edf4ef;
+  --rv-editor-danger: #8a2d23;
+  --rv-editor-danger-bg: #f8e8e4;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--rv-editor-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--rv-editor-text);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 38px rgba(38, 49, 41, 0.08);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.rv-editor *,
+.rv-editor *::before,
+.rv-editor *::after {
+  box-sizing: border-box;
+}
+
+.rv-editor button,
+.rv-editor input {
+  font: inherit;
+}
+
+.rv-editor button {
+  border: 0;
+  cursor: pointer;
+}
+
+.rv-editor button:disabled,
+.rv-editor input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.rv-editor__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e1e7df;
+}
+
+.rv-editor__heading h2 {
+  margin: 0;
+  color: #172026;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.rv-editor__danger-button,
+.rv-editor__secondary-button,
+.rv-editor__primary-button,
+.rv-editor__select {
+  min-height: 38px;
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #2f3a34;
+  background: #eef3eb;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rv-editor__danger-button {
+  color: var(--rv-editor-danger);
+  background: var(--rv-editor-danger-bg);
+}
+
+.rv-editor__secondary-button {
+  color: var(--rv-editor-accent);
+  background: #e7f0ea;
+}
+
+.rv-editor__primary-button {
+  color: #ffffff;
+  background: var(--rv-editor-accent);
+}
+
+.rv-editor__toolbar {
+  position: relative;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e1e7df;
+  background: var(--rv-editor-toolbar-bg);
+  overflow: visible;
+}
+
+.rv-editor__toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.rv-editor__toolbar-row button {
+  position: relative;
+  min-height: 36px;
+  border: 1px solid var(--rv-editor-border);
+  border-radius: 6px;
+  padding: 0 11px;
+  color: #263029;
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.rv-editor__toolbar-row button:hover,
+.rv-editor__select:hover,
+.rv-editor__select:focus {
+  border-color: var(--rv-editor-accent);
+  color: var(--rv-editor-accent);
+  outline: none;
+}
+
+.rv-editor__toolbar-row button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 500;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  max-width: 140px;
+  padding: 6px 8px;
+  transform: translateX(-50%) translateY(3px);
+  border-radius: 6px;
+  color: #ffffff;
+  background: rgba(21, 29, 24, 0.94);
+  box-shadow: 0 8px 20px rgba(21, 29, 24, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.rv-editor__toolbar-row button[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  z-index: 500;
+  left: 50%;
+  bottom: calc(100% + 3px);
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(21, 29, 24, 0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.rv-editor__toolbar-row button[data-tooltip]:hover::after,
+.rv-editor__toolbar-row button[data-tooltip]:focus-visible::after,
+.rv-editor__toolbar-row button.tooltip-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.rv-editor__toolbar-row button[data-tooltip]:hover::before,
+.rv-editor__toolbar-row button[data-tooltip]:focus-visible::before,
+.rv-editor__toolbar-row button.tooltip-visible::before {
+  opacity: 1;
+}
+
+.rv-editor__icon-button {
+  display: inline-grid;
+  width: 40px;
+  min-width: 40px;
+  place-items: center;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.rv-editor__table-actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  min-width: max-content;
+}
+
+.rv-editor__toolbar-row .rv-editor__table-actions button {
+  min-width: 42px;
+  padding: 0 8px;
+  color: var(--rv-editor-accent);
+  background: var(--rv-editor-soft-bg);
+}
+
+.rv-editor__dropdown {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.rv-editor__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 36px;
+  border: 1px solid var(--rv-editor-border);
+  width: 70px;
+  padding: 0 7px;
+  color: #263029;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.rv-editor__select-caret {
+  color: var(--rv-editor-muted);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.rv-editor__menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  min-width: 86px;
+  overflow: hidden;
+  border: 1px solid var(--rv-editor-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(38, 49, 41, 0.16);
+}
+
+.rv-editor__menu button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 12px;
+  text-align: left;
+  background: #ffffff;
+}
+
+.rv-editor__menu button:hover,
+.rv-editor__menu button.active {
+  color: var(--rv-editor-accent);
+  background: var(--rv-editor-soft-bg);
+}
+
+.rv-editor__dialog-backdrop {
+  position: absolute;
+  z-index: 600;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(23, 32, 26, 0.22);
+}
+
+.rv-editor__dialog {
+  display: grid;
+  gap: 12px;
+  width: min(360px, 100%);
+  border: 1px solid var(--rv-editor-border);
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(21, 29, 24, 0.26);
+}
+
+.rv-editor__dialog-heading,
+.rv-editor__dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rv-editor__dialog-heading {
+  justify-content: space-between;
+}
+
+.rv-editor__dialog-heading h3 {
+  margin: 0;
+  color: #172026;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.rv-editor__dialog-heading button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 6px;
+  color: #5c6860;
+  background: #eef3eb;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.rv-editor__dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.rv-editor__url-field {
+  display: grid;
+  gap: 5px;
+  padding: 2px;
+}
+
+.rv-editor__url-field span {
+  color: #5c6860;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rv-editor__url-field input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--rv-editor-border);
+  border-radius: 6px;
+  padding: 0 9px;
+  color: #263029;
+  background: #fbfcfa;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+}
+
+.rv-editor__url-field input:focus {
+  border-color: var(--rv-editor-accent);
+  box-shadow: 0 0 0 2px rgba(36, 90, 72, 0.12);
+}
+
+.rv-editor__content {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 26px;
+  outline: none;
+  caret-color: var(--rv-editor-accent);
+  color: var(--rv-editor-text);
+  background: #ffffff;
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.rv-editor__content:focus {
+  box-shadow:
+    inset 0 0 0 2px rgba(36, 90, 72, 0.42),
+    inset 0 0 0 5px rgba(36, 90, 72, 0.08);
+}
+
+.rv-editor__content::selection,
+.rv-editor__content *::selection {
+  color: #ffffff;
+  background: var(--rv-editor-accent);
+}
+
+.rv-editor__content:empty::before,
+.rv-editor__content:has(> p:only-child > br:only-child)::before {
+  content: attr(data-placeholder);
+  color: #97a29b;
+  pointer-events: none;
+}
+
+.rv-editor__content h1 {
+  font-size: 34px;
+}
+
+.rv-editor__content h2 {
+  font-size: 26px;
+}
+
+.rv-editor__content h3 {
+  font-size: 21px;
+}
+
+.rv-editor__content h4 {
+  font-size: 18px;
+}
+
+.rv-editor__content h5 {
+  font-size: 16px;
+}
+
+.rv-editor__content h6 {
+  font-size: 14px;
+}
+
+.rv-editor__content h1,
+.rv-editor__content h2,
+.rv-editor__content h3,
+.rv-editor__content h4,
+.rv-editor__content h5,
+.rv-editor__content h6 {
+  margin: 0 0 14px;
+  line-height: 1.2;
+}
+
+.rv-editor__content p,
+.rv-editor__content blockquote,
+.rv-editor__content ul,
+.rv-editor__content ol,
+.rv-editor__content pre,
+.rv-editor__content figure {
+  margin: 0 0 16px;
+}
+
+.rv-editor__content blockquote {
+  border-left: 4px solid var(--rv-editor-accent);
+  padding: 9px 0 9px 14px;
+  color: #455249;
+  background: #f3f7f2;
+}
+
+.rv-editor__content pre {
+  overflow: auto;
+  border-radius: 8px;
+  padding: 14px;
+  color: #eaf1ec;
+  background: #101713;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+}
+
+.rv-editor__content code {
+  border-radius: 5px;
+  padding: 2px 5px;
+  color: #154834;
+  background: #e8f1ea;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.rv-editor__content pre code {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.rv-editor__content a {
+  color: #1f6f56;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rv-editor__content hr {
+  height: 1px;
+  margin: 22px 0;
+  border: 0;
+  background: #d7ded5;
+}
+
+.rv-editor__content table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.rv-editor__content th,
+.rv-editor__content td {
+  border: 1px solid #cfd8ce;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.rv-editor__content th {
+  background: #f3f7f2;
+  font-weight: 700;
+}
+
+.rv-editor__content img {
+  display: inline-block;
+  max-width: min(100%, 420px);
+  max-height: 280px;
+  margin: 0;
+  vertical-align: middle;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(38, 49, 41, 0.12);
+}
+
+.rv-editor__content video {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  margin: 0 0 16px;
+  border-radius: 8px;
+  background: #000000;
+}
+
+.rv-editor__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
