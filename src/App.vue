@@ -11,8 +11,16 @@ import {
 
 const initialEditorHtml = [
   '<h1>移动与桌面都好用的编辑器</h1>',
-  '<p>选择任意文字后，可以设置 <strong>加粗</strong>、<em>斜体</em>、<code>代码</code> 等样式。</p>',
-  '<blockquote>图片会插入到当前光标所在的位置。</blockquote>'
+  '<p>选择任意文字后，可以设置 <strong>加粗</strong>、<em>斜体</em>、<u>下划线</u>、<s>删除线</s>、<code>行内代码</code>、<span style="font-family: Georgia, serif">字体</span>、<span style="font-size: 20px">文字大小</span>、<span style="color: #c0392b">字体颜色</span> 和 <span style="background-color: #fff3bf">文字背景色</span>。</p>',
+  '<h2>段落样式</h2>',
+  '<p><span style="font-family: SimSun, serif">宋体文本</span>、<span style="font-family: Georgia, serif">Georgia 文本</span>、<span style="font-size: 24px">24px 文本</span>、<span style="font-size: 14px">14px 文本</span>、<span style="color: #2563eb">蓝色文本</span>、<span style="color: #1f7a4d">绿色文本</span>、<span style="color: #7c3aed">紫色文本</span>、<span style="background-color: #dbeafe">蓝色背景</span> 会保留到 HTML 和 Markdown 预览里。</p>',
+  '<blockquote>引用块适合放提示、备注或重点说明。图片和视频会插入到当前光标所在的位置。</blockquote>',
+  '<ul><li>无序列表项目</li><li>支持继续编辑和追加内容</li></ul>',
+  '<ol><li>有序列表第一项</li><li>有序列表第二项</li></ol>',
+  '<pre><code>const message = "代码块示例";\nconsole.log(message);</code></pre>',
+  '<table><thead><tr><th>功能</th><th>展示</th></tr></thead><tbody><tr><td>表格</td><td>可插入行和列</td></tr><tr><td>链接</td><td><a href="https://example.com">示例链接</a></td></tr></tbody></table>',
+  '<hr>',
+  '<p>普通文本里换行会保留：<br>第一行<br>第二行<br>第三行</p>'
 ].join('');
 
 const modeOptions = [

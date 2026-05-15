@@ -2,7 +2,7 @@ const blockTags = [
   'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'ul', 'ol', 'li', 'figure', 'figcaption',
   'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td'
 ];
-const inlineTags = ['strong', 'em', 'u', 's', 'code', 'br', 'img', 'video', 'a'];
+const inlineTags = ['strong', 'em', 'u', 's', 'code', 'br', 'img', 'video', 'a', 'span', 'font'];
 const allowedTags = [...blockTags, ...inlineTags];
 
 export function sanitizeEditorHtml(value = '') {
@@ -11,6 +11,11 @@ export function sanitizeEditorHtml(value = '') {
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
     .replace(/<(\/?)b(\s[^>]*)?>/gi, '<$1strong>')
     .replace(/<(\/?)i(\s[^>]*)?>/gi, '<$1em>')
+    .replace(/<font(\s[^>]*)?>/gi, (match, attrs) => {
+      const color = readFontColor(attrs);
+      return color ? `<span style="color: ${color}">` : '<span>';
+    })
+    .replace(/<\/font>/gi, '</span>')
     .replace(/<div(\s[^>]*)?>/gi, '<p>')
     .replace(/<\/div>/gi, '</p>')
     .replace(/<br\s*\/?>/gi, '<br>')
@@ -47,6 +52,11 @@ export function sanitizeEditorHtml(value = '') {
       return `<a href="${escapeAttribute(href)}">`;
     }
 
+    if (tagName === 'span') {
+      const style = readSpanStyle(attrs);
+      return style ? `<span style="${style}">` : '<span>';
+    }
+
     if (tagName === 'hr') {
       return '<hr>';
     }
@@ -61,7 +71,7 @@ export function sanitizeEditorHtml(value = '') {
       : '';
   });
 
-  return html.trim();
+  return normalizeTextNodeLineBreaks(html).trim();
 }
 
 export function taggedTextToEditorHtml(value = '') {
@@ -71,6 +81,26 @@ export function taggedTextToEditorHtml(value = '') {
   }
 
   return sanitizeEditorHtml(text);
+}
+
+export function clipboardContentToEditorHtml({ html = '', text = '' } = {}) {
+  const plainText = String(text || '');
+  const htmlText = String(html || '');
+
+  if (hasMeaningfulPlainTextLineBreaks(plainText) && !hasHtmlLineBreaks(htmlText)) {
+    return plainTextToEditorHtml(plainText);
+  }
+
+  return htmlText ? taggedTextToEditorHtml(htmlText) : plainTextToEditorHtml(plainText);
+}
+
+export function plainTextToEditorHtml(value = '') {
+  const text = String(value || '').replace(/\r\n?/g, '\n').trim();
+  if (!text) {
+    return null;
+  }
+
+  return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
 }
 
 export function markdownToEditorHtml(value = '') {
@@ -239,6 +269,48 @@ function extractBodyHtml(value) {
   }
 
   return value;
+}
+
+function hasMeaningfulPlainTextLineBreaks(value) {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .filter((line) => line.trim())
+    .length > 1;
+}
+
+function hasHtmlLineBreaks(value) {
+  const html = extractBodyHtml(String(value || ''));
+  if (/<br\b/i.test(html) || /[\r\n]/.test(html)) {
+    return true;
+  }
+
+  const blockMatches = html.match(/<(?:p|div|li|h[1-6]|blockquote|pre|tr|table)\b/gi);
+  return (blockMatches?.length || 0) > 1;
+}
+
+function normalizeTextNodeLineBreaks(value) {
+  const parts = String(value).split(/(<[^>]+>)/g);
+  let preserveWhitespace = false;
+
+  return parts.map((part) => {
+    if (!part) {
+      return '';
+    }
+
+    const tag = part.match(/^<\/?([a-z][a-z0-9-]*)\b/i);
+    if (tag) {
+      const tagName = tag[1].toLowerCase();
+      if (/^<\//.test(part) && ['pre', 'code'].includes(tagName)) {
+        preserveWhitespace = false;
+      } else if (!/^<\//.test(part) && ['pre', 'code'].includes(tagName)) {
+        preserveWhitespace = true;
+      }
+      return part;
+    }
+
+    return preserveWhitespace ? part : part.replace(/\r\n?|\n/g, '<br>');
+  }).join('');
 }
 
 function readMarkdownTable(lines, startIndex) {
@@ -478,6 +550,69 @@ function readAttribute(attributes, name) {
   const pattern = new RegExp(`${name}=(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
   const match = String(attributes || '').match(pattern);
   return match?.[1] || match?.[2] || match?.[3] || '';
+}
+
+function readSpanStyle(attributes) {
+  const fontFamily = readStyleValue(attributes, 'font-family');
+  const color = readStyleValue(attributes, 'color');
+  const backgroundColor = readStyleValue(attributes, 'background-color') || readStyleValue(attributes, 'background');
+  const fontSize = readStyleValue(attributes, 'font-size');
+  return [
+    fontFamily ? `font-family: ${fontFamily}` : '',
+    fontSize ? `font-size: ${fontSize}` : '',
+    color ? `color: ${color}` : '',
+    backgroundColor ? `background-color: ${backgroundColor}` : ''
+  ].filter(Boolean).join('; ');
+}
+
+function readStyleValue(attributes, property) {
+  const style = decodeEntities(readAttribute(attributes, 'style'));
+  const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const colorMatch = style.match(new RegExp(`(?:^|;)\\s*${escapedProperty}\\s*:\\s*([^;]+)\\s*(?:;|$)`, 'i'));
+  if (!colorMatch) {
+    return '';
+  }
+
+  const color = colorMatch[1].trim();
+  if (property === 'font-size') {
+    return readSafeFontSizeValue(color);
+  }
+
+  if (property === 'font-family') {
+    return readSafeFontFamilyValue(color);
+  }
+
+  return isSafeColorValue(color) ? color : '';
+}
+
+function readFontColor(attributes) {
+  const color = decodeEntities(readAttribute(attributes, 'color')).trim();
+  return isSafeColorValue(color) ? color : '';
+}
+
+function isSafeColorValue(value) {
+  return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(value)
+    || /^rgba?\(\s*(?:\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(value);
+}
+
+function readSafeFontSizeValue(value) {
+  const fontSize = String(value || '').trim().toLowerCase();
+  return /^(?:12|14|16|18|20|24|28|32)px$/.test(fontSize) ? fontSize : '';
+}
+
+function readSafeFontFamilyValue(value) {
+  const fontFamily = String(value || '').trim();
+  const safeFontFamilies = new Set([
+    'system-ui, sans-serif',
+    "'PingFang SC', sans-serif",
+    "'Microsoft YaHei', 'PingFang SC', sans-serif",
+    'SimHei, sans-serif',
+    'SimSun, serif',
+    'Arial, sans-serif',
+    'Georgia, serif',
+    "'SFMono-Regular', Consolas, 'Liberation Mono', monospace"
+  ]);
+  return safeFontFamilies.has(fontFamily) ? fontFamily : '';
 }
 
 function escapeAttribute(value) {

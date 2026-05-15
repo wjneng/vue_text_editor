@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { isClickBelowLastLine, shouldResetBlockOnEnter } from '../editor/keyBehavior';
-import { editorHtmlToMarkdown, sanitizeEditorHtml, taggedTextToEditorHtml } from '../editor/richText';
+import { clipboardContentToEditorHtml, editorHtmlToMarkdown, sanitizeEditorHtml, taggedTextToEditorHtml } from '../editor/richText';
 import { appendTableColumnHtml, appendTableRowHtml } from '../editor/tableEditing';
 
 const props = defineProps({
@@ -78,9 +78,17 @@ const editorRef = ref(null);
 const rootRef = ref(null);
 const fileInputRef = ref(null);
 const videoInputRef = ref(null);
+const textColorInputRef = ref(null);
+const backgroundColorInputRef = ref(null);
 const savedRange = ref(null);
+const pendingFontFamilyRange = ref(null);
+const pendingFontSizeRange = ref(null);
+const pendingTextColorRange = ref(null);
+const pendingBackgroundColorRange = ref(null);
 const selectedTextBlock = ref('p');
 const textBlockMenuOpen = ref(false);
+const fontFamilyMenuOpen = ref(false);
+const fontSizeMenuOpen = ref(false);
 const imageMenuOpen = ref(false);
 const imageUrlValue = ref('');
 const videoMenuOpen = ref(false);
@@ -94,6 +102,13 @@ const videoUploading = ref(false);
 const activeTooltip = ref('');
 const activeTable = ref(null);
 const currentHtml = ref(sanitizeEditorHtml(props.modelValue || props.initialValue));
+const defaultTextColor = '#172026';
+const currentTextColor = ref(defaultTextColor);
+const defaultBackgroundColor = '#fff3bf';
+const currentBackgroundColor = ref(defaultBackgroundColor);
+const currentFontFamily = ref('system-ui, sans-serif');
+const currentFontSize = ref('16px');
+const hasSelectedText = ref(false);
 const initialRenderHtml = currentHtml.value;
 
 const textBlockOptions = [
@@ -119,6 +134,28 @@ const inlineTools = [
   { key: 'inlineCode', label: '</>', command: 'formatBlock', value: 'p', wrap: 'code', title: '行内代码' }
 ];
 
+const fontSizeOptions = [
+  { label: '12', value: '12px' },
+  { label: '14', value: '14px' },
+  { label: '16', value: '16px' },
+  { label: '18', value: '18px' },
+  { label: '20', value: '20px' },
+  { label: '24', value: '24px' },
+  { label: '28', value: '28px' },
+  { label: '32', value: '32px' }
+];
+
+const fontFamilyOptions = [
+  { label: '默认', value: 'system-ui, sans-serif' },
+  { label: '苹方', value: "'PingFang SC', sans-serif" },
+  { label: '微软雅黑', value: "'Microsoft YaHei', 'PingFang SC', sans-serif" },
+  { label: '黑体', value: 'SimHei, sans-serif' },
+  { label: '宋体', value: 'SimSun, serif' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: '等宽', value: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace" }
+];
+
 const allToolKeys = [
   'heading',
   'blockquote',
@@ -128,6 +165,10 @@ const allToolKeys = [
   'underline',
   'strike',
   'inlineCode',
+  'fontFamily',
+  'fontSize',
+  'textColor',
+  'backgroundColor',
   'unorderedList',
   'orderedList',
   'table',
@@ -158,9 +199,20 @@ const showLinkTool = computed(() => enabledToolSet.value.has('link'));
 const showDividerTool = computed(() => enabledToolSet.value.has('divider'));
 const showImageTool = computed(() => enabledToolSet.value.has('image'));
 const showVideoTool = computed(() => enabledToolSet.value.has('video'));
+const showFontFamilyTool = computed(() => enabledToolSet.value.has('fontFamily'));
+const showFontSizeTool = computed(() => enabledToolSet.value.has('fontSize'));
+const showTextColorTool = computed(() => enabledToolSet.value.has('textColor'));
+const showBackgroundColorTool = computed(() => enabledToolSet.value.has('backgroundColor'));
+const canApplyFontFamily = computed(() => isEditable.value && hasSelectedText.value);
+const canApplyFontSize = computed(() => isEditable.value && hasSelectedText.value);
+const canApplyTextColor = computed(() => isEditable.value && hasSelectedText.value);
+const canApplyBackgroundColor = computed(() => isEditable.value && hasSelectedText.value);
 
 const selectedTextBlockLabel = computed(
   () => enabledTextBlockOptions.value.find((option) => option.value === selectedTextBlock.value)?.label || '正文'
+);
+const currentFontFamilyLabel = computed(
+  () => fontFamilyOptions.find((option) => option.value === currentFontFamily.value)?.label || '默认'
 );
 
 const editorStyle = computed(() => ({
@@ -185,10 +237,12 @@ watch(
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutsidePointerDown);
+  document.addEventListener('selectionchange', handleSelectionChange);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  document.removeEventListener('selectionchange', handleSelectionChange);
 });
 
 function runCommand(tool) {
@@ -222,8 +276,22 @@ function applyTextBlockStyle(value) {
   runCommand({ command: 'formatBlock', value });
 }
 
+function toggleTextBlockMenu() {
+  if (!isEditable.value) {
+    return;
+  }
+  hideTooltip();
+  saveSelection();
+  fontFamilyMenuOpen.value = false;
+  fontSizeMenuOpen.value = false;
+  imageMenuOpen.value = false;
+  videoMenuOpen.value = false;
+  linkDialogOpen.value = false;
+  textBlockMenuOpen.value = !textBlockMenuOpen.value;
+}
+
 function handleOutsidePointerDown(event) {
-  if (!textBlockMenuOpen.value && !imageMenuOpen.value && !videoMenuOpen.value && !linkDialogOpen.value) {
+  if (!textBlockMenuOpen.value && !fontFamilyMenuOpen.value && !fontSizeMenuOpen.value && !imageMenuOpen.value && !videoMenuOpen.value && !linkDialogOpen.value) {
     return;
   }
 
@@ -234,6 +302,8 @@ function handleOutsidePointerDown(event) {
 
 function closeToolbarMenus() {
   textBlockMenuOpen.value = false;
+  fontFamilyMenuOpen.value = false;
+  fontSizeMenuOpen.value = false;
   imageMenuOpen.value = false;
   videoMenuOpen.value = false;
   linkDialogOpen.value = false;
@@ -268,6 +338,10 @@ function clearEditor() {
     editorRef.value.innerHTML = '<p><br></p>';
   }
   setEditorHtml('<p><br></p>');
+  currentTextColor.value = defaultTextColor;
+  currentBackgroundColor.value = defaultBackgroundColor;
+  currentFontFamily.value = 'system-ui, sans-serif';
+  currentFontSize.value = '16px';
   focusEditor();
 }
 
@@ -297,14 +371,42 @@ function setEditorHtml(value) {
 function saveSelection() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || !editorRef.value) {
+    hasSelectedText.value = false;
     return;
   }
 
   const range = selection.getRangeAt(0);
   if (editorRef.value.contains(range.commonAncestorContainer)) {
     savedRange.value = range.cloneRange();
+    hasSelectedText.value = isTextRangeSelected(range);
     updateActiveTable(range.commonAncestorContainer);
+    updateFontFamilyFromRange(range);
+    return;
   }
+
+  hasSelectedText.value = false;
+}
+
+function handleSelectionChange() {
+  if (!editorRef.value) {
+    hasSelectedText.value = false;
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    hasSelectedText.value = false;
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (editorRef.value.contains(range.commonAncestorContainer)) {
+    hasSelectedText.value = isTextRangeSelected(range);
+    updateFontFamilyFromRange(range);
+    return;
+  }
+
+  hasSelectedText.value = false;
 }
 
 function handlePaste(event) {
@@ -313,7 +415,7 @@ function handlePaste(event) {
   }
   const html = event.clipboardData?.getData('text/html');
   const text = event.clipboardData?.getData('text/plain');
-  const converted = taggedTextToEditorHtml(html || text);
+  const converted = clipboardContentToEditorHtml({ html, text });
 
   if (!converted) {
     return;
@@ -571,6 +673,236 @@ function wrapSelectionWithCode() {
   range.deleteContents();
   range.insertNode(code);
   selection.removeAllRanges();
+}
+
+function toggleFontFamilyMenu() {
+  if (!canApplyFontFamily.value) {
+    return;
+  }
+  hideTooltip();
+  saveSelection();
+  if (!canApplyFontFamily.value) {
+    return;
+  }
+  pendingFontFamilyRange.value = savedRange.value?.cloneRange() || null;
+  textBlockMenuOpen.value = false;
+  fontSizeMenuOpen.value = false;
+  imageMenuOpen.value = false;
+  videoMenuOpen.value = false;
+  linkDialogOpen.value = false;
+  fontFamilyMenuOpen.value = !fontFamilyMenuOpen.value;
+}
+
+function applyFontFamily(fontFamily) {
+  if (!isEditable.value || !isSafeFontFamily(fontFamily) || !isTextRangeSelected(pendingFontFamilyRange.value)) {
+    return;
+  }
+
+  currentFontFamily.value = fontFamily;
+  savedRange.value = pendingFontFamilyRange.value.cloneRange();
+  fontFamilyMenuOpen.value = false;
+  applyInlineStyle({ fontFamily });
+}
+
+function updateFontFamilyFromRange(range) {
+  if (!range || !editorRef.value) {
+    currentFontFamily.value = 'system-ui, sans-serif';
+    return;
+  }
+
+  if (!range.collapsed) {
+    const selectedFontFamilies = collectFontFamiliesInRange(range);
+    currentFontFamily.value = selectedFontFamilies.size === 1
+      ? [...selectedFontFamilies][0]
+      : 'system-ui, sans-serif';
+    return;
+  }
+
+  const node = range.startContainer?.nodeType === Node.TEXT_NODE
+    ? range.startContainer.parentElement
+    : range.startContainer;
+  const fontFamily = findFontFamilyOnNode(node);
+  currentFontFamily.value = fontFamily || 'system-ui, sans-serif';
+}
+
+function findFontFamilyOnNode(node) {
+  let current = node;
+  while (current && current !== editorRef.value) {
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const fontFamily = normalizeFontFamilyValue(current.style?.fontFamily || '');
+      if (fontFamily) {
+        return fontFamily;
+      }
+    }
+    current = current.parentElement;
+  }
+
+  return '';
+}
+
+function collectFontFamiliesInRange(range) {
+  const fontFamilies = new Set();
+  const commonAncestor = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentElement
+    : range.commonAncestorContainer;
+  const walker = document.createTreeWalker(
+    commonAncestor,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (!node.textContent.trim() || !range.intersectsNode(node)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    }
+  );
+
+  const startNode = commonAncestor.nodeType === Node.TEXT_NODE ? commonAncestor : walker.nextNode();
+  let currentNode = startNode;
+  while (currentNode) {
+    fontFamilies.add(findFontFamilyOnNode(currentNode.parentElement) || 'system-ui, sans-serif');
+    currentNode = walker.nextNode();
+  }
+
+  return fontFamilies;
+}
+
+function toggleFontSizeMenu() {
+  if (!canApplyFontSize.value) {
+    return;
+  }
+  hideTooltip();
+  saveSelection();
+  if (!canApplyFontSize.value) {
+    return;
+  }
+  pendingFontSizeRange.value = savedRange.value?.cloneRange() || null;
+  textBlockMenuOpen.value = false;
+  fontFamilyMenuOpen.value = false;
+  imageMenuOpen.value = false;
+  videoMenuOpen.value = false;
+  linkDialogOpen.value = false;
+  fontSizeMenuOpen.value = !fontSizeMenuOpen.value;
+}
+
+function applyFontSize(size) {
+  if (!isEditable.value || !isSafeFontSize(size) || !isTextRangeSelected(pendingFontSizeRange.value)) {
+    return;
+  }
+
+  currentFontSize.value = size;
+  savedRange.value = pendingFontSizeRange.value.cloneRange();
+  fontSizeMenuOpen.value = false;
+  applyInlineStyle({ fontSize: size });
+}
+
+function openTextColorPicker() {
+  if (!canApplyTextColor.value) {
+    return;
+  }
+  hideTooltip();
+  saveSelection();
+  if (!canApplyTextColor.value) {
+    return;
+  }
+  pendingTextColorRange.value = savedRange.value?.cloneRange() || null;
+  closeToolbarMenus();
+  textColorInputRef.value?.click();
+}
+
+function handleTextColorInput(event) {
+  applyTextColor(event.target.value);
+}
+
+function applyTextColor(color) {
+  if (!isEditable.value || !isSafeColor(color) || !isTextRangeSelected(pendingTextColorRange.value)) {
+    return;
+  }
+
+  currentTextColor.value = normalizeColorValue(color);
+  savedRange.value = pendingTextColorRange.value.cloneRange();
+  applyInlineStyle({ color });
+}
+
+function openBackgroundColorPicker() {
+  if (!canApplyBackgroundColor.value) {
+    return;
+  }
+  hideTooltip();
+  saveSelection();
+  if (!canApplyBackgroundColor.value) {
+    return;
+  }
+  pendingBackgroundColorRange.value = savedRange.value?.cloneRange() || null;
+  closeToolbarMenus();
+  backgroundColorInputRef.value?.click();
+}
+
+function handleBackgroundColorInput(event) {
+  applyBackgroundColor(event.target.value);
+}
+
+function applyBackgroundColor(color) {
+  if (!isEditable.value || !isSafeColor(color) || !isTextRangeSelected(pendingBackgroundColorRange.value)) {
+    return;
+  }
+
+  currentBackgroundColor.value = normalizeColorValue(color);
+  savedRange.value = pendingBackgroundColorRange.value.cloneRange();
+  applyInlineStyle({ backgroundColor: color });
+}
+
+function applyInlineStyle(style) {
+  focusEditor();
+  restoreSelection();
+  const selection = window.getSelection();
+  const styleText = inlineStyleToText(style);
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    document.execCommand('insertHTML', false, `<span style="${styleText}">文字</span>`);
+    syncEditorHtml();
+    saveSelection();
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const span = document.createElement('span');
+  Object.assign(span.style, style);
+  span.textContent = range.toString();
+  range.deleteContents();
+  range.insertNode(span);
+  selection.removeAllRanges();
+  const newRange = document.createRange();
+  newRange.selectNodeContents(span);
+  selection.addRange(newRange);
+  syncEditorHtml();
+  saveSelection();
+}
+
+function inlineStyleToText(style) {
+  return [
+    style.fontFamily ? `font-family: ${style.fontFamily}` : '',
+    style.fontSize ? `font-size: ${style.fontSize}` : '',
+    style.color ? `color: ${style.color}` : '',
+    style.backgroundColor ? `background-color: ${style.backgroundColor}` : ''
+  ].filter(Boolean).join('; ');
+}
+
+function isTextRangeSelected(range) {
+  return Boolean(range && !range.collapsed && range.toString().trim().length > 0);
+}
+
+function isSafeFontSize(value) {
+  return fontSizeOptions.some((option) => option.value === value);
+}
+
+function isSafeFontFamily(value) {
+  return fontFamilyOptions.some((option) => option.value === value);
+}
+
+function normalizeFontFamilyValue(value) {
+  const normalized = String(value || '').replaceAll('"', "'").replace(/\s*,\s*/g, ', ').trim();
+  return fontFamilyOptions.find((option) => option.value.replaceAll('"', "'") === normalized)?.value || '';
 }
 
 function openLinkDialog() {
@@ -878,6 +1210,34 @@ function escapeHtml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
 }
+
+function isSafeColor(value) {
+  return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(String(value || '').trim());
+}
+
+function normalizeColorValue(value) {
+  const color = String(value || '').trim();
+  if (!color) {
+    return '';
+  }
+
+  if (isSafeColor(color)) {
+    return color.toLowerCase();
+  }
+
+  const rgbMatch = color.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i);
+  if (!rgbMatch) {
+    return color.toLowerCase();
+  }
+
+  const channels = rgbMatch.slice(1, 4).map(Number);
+  if (channels.some((channel) => channel < 0 || channel > 255)) {
+    return color.toLowerCase();
+  }
+
+  const toHex = (value) => value.toString(16).padStart(2, '0');
+  return `#${channels.map(toHex).join('')}`;
+}
 </script>
 
 <template>
@@ -899,7 +1259,7 @@ function escapeHtml(value) {
       aria-label="样式快捷选择"
     >
       <div class="rv-editor__toolbar-row toolbar-row">
-        <div class="rv-editor__dropdown toolbar-dropdown">
+        <div class="rv-editor__dropdown toolbar-dropdown" :class="{ 'is-open': textBlockMenuOpen }">
           <button
             v-if="showTextBlockSelect"
             type="button"
@@ -915,7 +1275,7 @@ function escapeHtml(value) {
             @touchstart.passive="handleTooltipTouchStart('段落样式')"
             @touchend="hideTooltip"
             @touchcancel="hideTooltip"
-            @click="imageMenuOpen = false; videoMenuOpen = false; textBlockMenuOpen = !textBlockMenuOpen"
+            @click="toggleTextBlockMenu"
           >
             <span>{{ selectedTextBlockLabel }}</span>
             <span class="rv-editor__select-caret select-caret">▾</span>
@@ -927,6 +1287,46 @@ function escapeHtml(value) {
               type="button"
               :class="{ active: selectedTextBlock === option.value }"
               @click="applyTextBlockStyle(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="showFontFamilyTool"
+          class="rv-editor__dropdown toolbar-dropdown"
+          :class="{ 'is-open': fontFamilyMenuOpen }"
+        >
+          <button
+            type="button"
+            class="rv-editor__select toolbar-select font-family-select"
+            aria-label="字体"
+            :aria-expanded="fontFamilyMenuOpen"
+            data-tooltip="字体"
+            :class="{ 'tooltip-visible': activeTooltip === '字体' }"
+            @mouseenter="showTooltip('字体')"
+            @mouseleave="hideTooltip"
+            @focus="showTooltip('字体')"
+            @blur="hideTooltip"
+            @touchstart.passive="handleTooltipTouchStart('字体')"
+            @touchend="hideTooltip"
+            @touchcancel="hideTooltip"
+            @mousedown.prevent
+            @click="toggleFontFamilyMenu"
+            :disabled="!canApplyFontFamily"
+          >
+            <span>{{ currentFontFamilyLabel }}</span>
+            <span class="rv-editor__select-caret select-caret">▾</span>
+          </button>
+          <div v-if="fontFamilyMenuOpen" class="rv-editor__menu toolbar-menu font-family-menu">
+            <button
+              v-for="option in fontFamilyOptions"
+              :key="option.value"
+              type="button"
+              :class="{ active: currentFontFamily === option.value }"
+              :style="{ fontFamily: option.value }"
+              @mousedown.prevent
+              @click="applyFontFamily(option.value)"
             >
               {{ option.label }}
             </button>
@@ -972,6 +1372,107 @@ function escapeHtml(value) {
         >
           {{ tool.label }}
         </button>
+        <div
+          v-if="showFontSizeTool"
+          class="rv-editor__dropdown toolbar-dropdown"
+          :class="{ 'is-open': fontSizeMenuOpen }"
+        >
+          <button
+            type="button"
+            class="rv-editor__select toolbar-select"
+            aria-label="文字大小"
+            :aria-expanded="fontSizeMenuOpen"
+            data-tooltip="文字大小"
+            :class="{ 'tooltip-visible': activeTooltip === '文字大小' }"
+            @mouseenter="showTooltip('文字大小')"
+            @mouseleave="hideTooltip"
+            @focus="showTooltip('文字大小')"
+            @blur="hideTooltip"
+            @touchstart.passive="handleTooltipTouchStart('文字大小')"
+            @touchend="hideTooltip"
+            @touchcancel="hideTooltip"
+            @mousedown.prevent
+            @click="toggleFontSizeMenu"
+            :disabled="!canApplyFontSize"
+          >
+            <span>{{ currentFontSize.replace('px', '') }}</span>
+            <span class="rv-editor__select-caret select-caret">▾</span>
+          </button>
+          <div v-if="fontSizeMenuOpen" class="rv-editor__menu toolbar-menu">
+            <button
+              v-for="option in fontSizeOptions"
+              :key="option.value"
+              type="button"
+              :class="{ active: currentFontSize === option.value }"
+              @mousedown.prevent
+              @click="applyFontSize(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="showTextColorTool"
+          class="rv-editor__dropdown toolbar-dropdown"
+        >
+          <button
+            type="button"
+            aria-label="字体颜色"
+            data-tooltip="字体颜色"
+            :class="{ 'tooltip-visible': activeTooltip === '字体颜色' }"
+            @mouseenter="showTooltip('字体颜色')"
+            @mouseleave="hideTooltip"
+            @focus="showTooltip('字体颜色')"
+            @blur="hideTooltip"
+            @touchstart.passive="handleTooltipTouchStart('字体颜色')"
+            @touchend="hideTooltip"
+            @touchcancel="hideTooltip"
+            @mousedown.prevent
+            @click="openTextColorPicker"
+            :disabled="!canApplyTextColor"
+          >
+            <span class="color-button-icon">A</span>
+          </button>
+          <input
+            ref="textColorInputRef"
+            class="rv-editor__visually-hidden visually-hidden"
+            type="color"
+            :value="currentTextColor"
+            aria-label="选择字体颜色"
+            @input="handleTextColorInput"
+          >
+        </div>
+        <div
+          v-if="showBackgroundColorTool"
+          class="rv-editor__dropdown toolbar-dropdown"
+        >
+          <button
+            type="button"
+            aria-label="文字背景色"
+            data-tooltip="文字背景色"
+            :class="{ 'tooltip-visible': activeTooltip === '文字背景色' }"
+            @mouseenter="showTooltip('文字背景色')"
+            @mouseleave="hideTooltip"
+            @focus="showTooltip('文字背景色')"
+            @blur="hideTooltip"
+            @touchstart.passive="handleTooltipTouchStart('文字背景色')"
+            @touchend="hideTooltip"
+            @touchcancel="hideTooltip"
+            @mousedown.prevent
+            @click="openBackgroundColorPicker"
+            :disabled="!canApplyBackgroundColor"
+          >
+            <span class="color-button-icon background-color-button-icon">A</span>
+          </button>
+          <input
+            ref="backgroundColorInputRef"
+            class="rv-editor__visually-hidden visually-hidden"
+            type="color"
+            :value="currentBackgroundColor"
+            aria-label="选择文字背景色"
+            @input="handleBackgroundColorInput"
+          >
+        </div>
         <button
           v-if="showUnorderedListTool"
           type="button"
