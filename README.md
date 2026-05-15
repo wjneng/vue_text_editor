@@ -2,7 +2,10 @@
 
 ![vue-text-editor 宣传图](./docs/assets/vue-text-editor-readme-cover.png)
 
-一个面向 Vue 3 的富文本编辑器组件，适合封装成三方包给业务项目复用。组件输出安全清理后的 HTML，并提供 HTML、Markdown、完整 HTML 文档之间的转换工具。
+
+一个面向 Vue 3 的富文本编辑器组件，适合封装成三方包给业务项目复用。组件输出安全清理后的 HTML，并提供 HTML、Markdown、完整 HTML 文档之间的转换工具。\
+
+## 警告：不要直接使用 功能还在完善中 随时有破坏性修改
 
 ## 当前已实现
 
